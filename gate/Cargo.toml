@@ -1,0 +1,20 @@
+[package]
+name = "oxigraph-gate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+dotenvy = "0.15"
+rand = "0.8"
+hex = "0.4"
+axum-extra = { version = "0.9", features = ["cookie"] }
+http-body-util = "0.1"
+bytes = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }

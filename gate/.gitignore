@@ -1,0 +1,6 @@
+# Environment variables (contains access token)
+.env
+
+# Rust build artifacts
+/target/
+Cargo.lock
