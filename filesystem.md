@@ -6,11 +6,15 @@ The gate service provides file storage with RDF metadata indexing in Oxigraph.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/file/{path}` | Retrieve a file by its logical path |
+| GET | `/file` | List root directory |
+| GET | `/file/{path}` | Retrieve file or list directory |
+| GET | `/res/{uuid}` | Retrieve a file directly by UUID |
 | GET | `/upload` | HTML upload form |
 | POST | `/upload` | Upload files to the `upload` directory |
 
 All endpoints require authentication via access token (header or cookie).
+
+If `/file/{path}` points to a directory, returns an HTML listing with clickable `.` (current), `..` (parent), and all entries.
 
 ## Storage
 
