@@ -4,8 +4,10 @@ mod proxy;
 mod templates;
 
 use axum::{routing::{get, post}, Router};
+use http::Method;
 use reqwest::Client;
 use std::{net::SocketAddr, sync::Arc};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -53,16 +55,22 @@ async fn main() {
         client,
     });
 
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_origin(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/gate/login", get(login_page))
         .route("/gate/login", post(login_submit))
         .route("/file", get(file_root_handler))
         .route("/file/", get(file_root_handler))
         .route("/file/*path", get(file_handler))
-        .route("/res/{uuid}", get(res_handler))
+        .route("/res/:uuid", get(res_handler))
         .route("/upload", get(upload_page))
         .route("/upload", post(upload_handler))
         .fallback(proxy_handler)
+        .layer(cors)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(BIND_ADDR).await.unwrap();

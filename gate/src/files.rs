@@ -725,7 +725,7 @@ pub async fn upload_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create files directory").into_response();
     }
 
-    let mut uploaded_files = Vec::new();
+    let mut uploaded_files: Vec<(String, Uuid)> = Vec::new();
     let mut total_size: usize = 0;
 
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -833,13 +833,39 @@ pub async fn upload_handler(
             }
         }
 
-        uploaded_files.push(safe_filename);
+        uploaded_files.push((safe_filename, file_uuid));
     }
 
     if uploaded_files.is_empty() {
         return (StatusCode::BAD_REQUEST, "No files uploaded").into_response();
     }
 
-    let message = format!("Uploaded {} file(s): {}", uploaded_files.len(), uploaded_files.join(", "));
+    // Check if client wants JSON response
+    let wants_json = headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.contains("application/json"))
+        .unwrap_or(false);
+
+    if wants_json {
+        // Return JSON with file info (use first file's UUID for single upload)
+        let json_response = serde_json::json!({
+            "success": true,
+            "files": uploaded_files.iter().map(|(name, uuid)| {
+                serde_json::json!({
+                    "filename": name,
+                    "uuid": uuid.to_string()
+                })
+            }).collect::<Vec<_>>(),
+            "uuid": uploaded_files.first().map(|(_, uuid)| uuid.to_string())
+        });
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "application/json")],
+            json_response.to_string(),
+        ).into_response();
+    }
+
+    let message = format!("Uploaded {} file(s): {}", uploaded_files.len(), uploaded_files.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join(", "));
     Html(upload_success_html(&message)).into_response()
 }
