@@ -12,7 +12,7 @@ import MarkdownViewer from './views/MarkdownViewer';
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [showTokenDialog, setShowTokenDialog] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [activeView, setActiveView] = useState('tasks');
   const [viewingFile, setViewingFile] = useState(null);
 
