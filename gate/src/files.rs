@@ -18,6 +18,29 @@ pub const FILES_DIR: &str = "../files";
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024 * 1024 * 1024; // 4 GB
 const FILESYSTEM_GRAPH: &str = "http://liqk.org/graph/filesystem";
 
+/// Escape a string for use in SPARQL string literals.
+/// Handles backslashes, quotes, and control characters per SPARQL spec.
+fn escape_sparql_string(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
+/// Validate that a string is a valid UUID format.
+/// Returns the validated UUID string or None if invalid.
+fn validate_uuid(s: &str) -> Option<Uuid> {
+    Uuid::parse_str(s).ok()
+}
+
 /// Extract full extension from filename (e.g., "archive.tar.gz" -> "tar.gz")
 fn extract_extension(filename: &str) -> Option<String> {
     let parts: Vec<&str> = filename.split('.').collect();
@@ -62,9 +85,9 @@ INSERT DATA {{
 }}"#,
         graph = FILESYSTEM_GRAPH,
         uuid_urn = uuid_urn,
-        filename = original_filename.replace('"', "\\\""),
+        filename = escape_sparql_string(original_filename),
         size = file_size,
-        mime = mime_type,
+        mime = escape_sparql_string(mime_type),
         timestamp = upload_timestamp,
         stored_filename = stored_filename,
         upload_dir = upload_dir_uuid,
@@ -167,7 +190,7 @@ SELECT ?storedAs FROM <{}> WHERE {{
             current_var,
             next_var,
             next_var,
-            label.replace('"', "\\\"")
+            escape_sparql_string(label)
         ));
         current_var = next_var;
     }
@@ -179,7 +202,7 @@ SELECT ?storedAs FROM <{}> WHERE {{
     ?file liqk:storedAs ?storedAs .
 }}"#,
         current_var,
-        filename.replace('"', "\\\"")
+        escape_sparql_string(filename)
     ));
 
     query
@@ -264,7 +287,7 @@ ASK FROM <{}> WHERE {{
             current_var,
             next_var,
             next_var,
-            label.replace('"', "\\\""),
+            escape_sparql_string(label),
             next_var
         ));
         current_var = next_var;
@@ -322,7 +345,7 @@ SELECT ?label ?isDir FROM <{}> WHERE {{
             current_var,
             next_var,
             next_var,
-            label.replace('"', "\\\""),
+            escape_sparql_string(label),
             next_var
         ));
         current_var = next_var;
@@ -480,7 +503,7 @@ SELECT ?dir FROM <{}> WHERE {{
     ?dir rdfs:label "{}" .
 }}"#,
         FILESYSTEM_GRAPH,
-        label.replace('"', "\\\"")
+        escape_sparql_string(label)
     );
 
     let query_url = format!("{}/query", oxigraph_url);
@@ -631,15 +654,24 @@ pub async fn res_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     headers: HeaderMap,
-    Path(uuid): Path<String>,
+    Path(uuid_str): Path<String>,
 ) -> Response {
     if !validate_token(&state, &headers, &jar) {
-        warn!(client = %addr, uuid = %uuid, "Unauthorized res request");
+        warn!(client = %addr, uuid = %uuid_str, "Unauthorized res request");
         return (StatusCode::SEE_OTHER, [(header::LOCATION, "/gate/login")]).into_response();
     }
 
-    // Lookup file by UUID
-    let stored_filename = match lookup_file_by_uuid(&state.client, &state.oxigraph_url, &uuid).await {
+    // Validate UUID format to prevent SPARQL injection
+    let uuid = match validate_uuid(&uuid_str) {
+        Some(u) => u,
+        None => {
+            warn!(client = %addr, uuid = %uuid_str, "Invalid UUID format");
+            return (StatusCode::BAD_REQUEST, "Invalid UUID format").into_response();
+        }
+    };
+
+    // Lookup file by validated UUID
+    let stored_filename = match lookup_file_by_uuid(&state.client, &state.oxigraph_url, &uuid.to_string()).await {
         Ok(Some(name)) => name,
         Ok(None) => {
             warn!(client = %addr, uuid = %uuid, "File not found");
