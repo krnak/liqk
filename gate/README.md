@@ -9,6 +9,7 @@ An HTTP proxy service for [oxigraph-cli](https://github.com/oxigraph/oxigraph) t
 - Browser login page for manual token entry
 - Cookie-based session persistence
 - Configurable upstream oxigraph URL
+- RDF-indexed file storage with upload/download endpoints
 
 ## Installation
 
@@ -98,6 +99,49 @@ All oxigraph endpoints are proxied:
 | `/update` | SPARQL update (POST) |
 | `/store` | Graph Store Protocol |
 | `/` | YASGUI interface |
+
+### File Storage
+
+The gate includes an RDF-indexed file storage system. Files are stored on disk and indexed in Oxigraph using the `http://liqk.org/graph/filesystem` graph.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/upload` | GET | Upload form page |
+| `/upload` | POST | Upload files (multipart/form-data) |
+| `/file/` | GET | Browse root directory |
+| `/file/{path}` | GET | Browse directory or download file by path |
+| `/res/{uuid}` | GET | Download file by UUID |
+
+#### Upload Files
+
+```bash
+# Upload via curl
+curl -X POST -H "X-Access-Token: YOUR_TOKEN" \
+  -F "file=@document.pdf" \
+  http://localhost:8080/upload
+
+# Response (JSON if Accept: application/json)
+{"success":true,"files":[{"filename":"document.pdf","uuid":"550e8400-e29b-41d4-a716-446655440000"}]}
+```
+
+#### Download by UUID
+
+```bash
+curl -H "X-Access-Token: YOUR_TOKEN" \
+  http://localhost:8080/res/550e8400-e29b-41d4-a716-446655440000 \
+  -o document.pdf
+```
+
+#### Browse Files
+
+Navigate to `/file/` in a browser (after login) to browse the virtual filesystem. Files are organized in directories defined in the RDF graph.
+
+#### Storage Details
+
+- Files are stored in `../files/` relative to the working directory
+- Each file is renamed to `{uuid}.{extension}` on disk
+- Metadata (original name, size, MIME type, timestamp) is stored in Oxigraph
+- Maximum upload size: 4 GB
 
 ## Logging
 
