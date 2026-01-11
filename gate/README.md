@@ -111,6 +111,7 @@ The gate includes an RDF-indexed file storage system. Files are stored on disk a
 | `/file/` | GET | Browse root directory |
 | `/file/{path}` | GET | Browse directory or download file by path |
 | `/res/{uuid}` | GET | Download file by UUID |
+| `/res/{uuid}` | PUT | Replace file content (keeping same UUID) |
 
 #### Upload Files
 
@@ -131,6 +132,16 @@ curl -H "X-Access-Token: YOUR_TOKEN" \
   http://localhost:8080/res/550e8400-e29b-41d4-a716-446655440000 \
   -o document.pdf
 ```
+
+#### Replace File Content
+
+```bash
+curl -X PUT -H "X-Access-Token: YOUR_TOKEN" \
+  --data-binary @updated_document.pdf \
+  http://localhost:8080/res/550e8400-e29b-41d4-a716-446655440000
+```
+
+The file content is replaced while keeping the same UUID. The file size is updated in the RDF metadata.
 
 #### Browse Files
 

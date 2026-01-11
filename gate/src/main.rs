@@ -12,7 +12,7 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use auth::{load_or_generate_config, login_page, login_submit};
-use files::{file_handler, file_root_handler, res_handler, upload_handler, upload_page};
+use files::{file_handler, file_root_handler, res_handler, res_put_handler, upload_handler, upload_page};
 use proxy::proxy_handler;
 
 const BIND_ADDR: &str = "0.0.0.0:8080";
@@ -89,7 +89,7 @@ async fn main() {
         .route("/file", get(file_root_handler))
         .route("/file/", get(file_root_handler))
         .route("/file/*path", get(file_handler))
-        .route("/res/:uuid", get(res_handler))
+        .route("/res/:uuid", get(res_handler).put(res_put_handler))
         .route("/upload", get(upload_page))
         .route("/upload", post(upload_handler))
         .fallback(proxy_handler)

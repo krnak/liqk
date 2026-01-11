@@ -708,6 +708,90 @@ pub async fn res_handler(
     }
 }
 
+/// Update file size in RDF after rewrite
+async fn update_file_size(
+    client: &reqwest::Client,
+    oxigraph_url: &str,
+    uuid: &Uuid,
+    new_size: usize,
+) -> Result<(), String> {
+    let uuid_urn = format!("urn:uuid:{}", uuid);
+
+    let query = format!(
+        r#"PREFIX posix: <http://www.w3.org/ns/posix/stat#>
+
+DELETE {{ GRAPH <{graph}> {{ <{uuid_urn}> posix:size ?oldSize }} }}
+INSERT {{ GRAPH <{graph}> {{ <{uuid_urn}> posix:size {new_size} }} }}
+WHERE {{ GRAPH <{graph}> {{ <{uuid_urn}> posix:size ?oldSize }} }}"#,
+        graph = FILESYSTEM_GRAPH,
+        uuid_urn = uuid_urn,
+        new_size = new_size,
+    );
+
+    send_sparql_update(client, oxigraph_url, &query).await
+}
+
+pub async fn res_put_handler(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    Path(uuid_str): Path<String>,
+    body: axum::body::Bytes,
+) -> Response {
+    if !validate_token(&state, &headers, &jar) {
+        warn!(client = %addr, uuid = %uuid_str, "Unauthorized res PUT request");
+        return (StatusCode::SEE_OTHER, [(header::LOCATION, "/gate/login")]).into_response();
+    }
+
+    // Validate UUID format to prevent SPARQL injection
+    let uuid = match validate_uuid(&uuid_str) {
+        Some(u) => u,
+        None => {
+            warn!(client = %addr, uuid = %uuid_str, "Invalid UUID format");
+            return (StatusCode::BAD_REQUEST, "Invalid UUID format").into_response();
+        }
+    };
+
+    // Check file size limit
+    if body.len() > MAX_UPLOAD_SIZE {
+        warn!(client = %addr, uuid = %uuid, size = body.len(), "File too large");
+        return (StatusCode::PAYLOAD_TOO_LARGE, "File too large (max 4 GB)").into_response();
+    }
+
+    // Lookup existing file to get stored filename
+    let stored_filename = match lookup_file_by_uuid(&state.client, &state.oxigraph_url, &uuid.to_string()).await {
+        Ok(Some(name)) => name,
+        Ok(None) => {
+            warn!(client = %addr, uuid = %uuid, "File not found");
+            return (StatusCode::NOT_FOUND, "File not found").into_response();
+        }
+        Err(e) => {
+            warn!(client = %addr, uuid = %uuid, error = %e, "SPARQL lookup failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to lookup file").into_response();
+        }
+    };
+
+    // Write new content to disk
+    let file_path = PathBuf::from(FILES_DIR).join(&stored_filename);
+    let file_size = body.len();
+
+    if let Err(e) = tokio::fs::write(&file_path, &body).await {
+        warn!(client = %addr, uuid = %uuid, error = %e, "Failed to write file");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write file").into_response();
+    }
+
+    // Update file size in RDF
+    if let Err(e) = update_file_size(&state.client, &state.oxigraph_url, &uuid, file_size).await {
+        warn!(client = %addr, uuid = %uuid, error = %e, "Failed to update file size in RDF");
+        // File was written successfully, so we return success but log the RDF error
+    }
+
+    info!(client = %addr, uuid = %uuid, stored_as = %stored_filename, bytes = file_size, "File rewritten");
+
+    (StatusCode::OK, format!("File updated ({} bytes)", file_size)).into_response()
+}
+
 pub async fn upload_page(
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
