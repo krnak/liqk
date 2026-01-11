@@ -30,14 +30,23 @@ Configuration is stored in a `.env` file in the working directory.
 |----------|-------------|---------|
 | `ACCESS_TOKEN` | 32-character hex string | Auto-generated |
 | `OXIGRAPH_URL` | Upstream oxigraph URL | `http://localhost:7878` |
+| `SECURE_COOKIES` | Set cookie Secure flag (requires HTTPS) | `true` |
 
 If no valid token exists on startup, a new one is generated and saved to `.env`.
 
 ### Example `.env`
 
+**Production (behind HTTPS proxy):**
 ```
 ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 OXIGRAPH_URL=http://localhost:7878
+```
+
+**Development (local HTTP only):**
+```
+ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+OXIGRAPH_URL=http://localhost:7878
+SECURE_COOKIES=false
 ```
 
 ## Usage
@@ -70,9 +79,14 @@ Or `Authorization: Bearer` header:
 curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/query?query=SELECT%20*%20WHERE%20{?s%20?p%20?o}
 ```
 
-#### Browser Session
+#### Browser Session (Cookie Authentication)
 
-Navigate to `http://localhost:8080` in a browser. You will be redirected to the login page where you can enter the token. After successful authentication, a session cookie is set.
+Navigate to `http://localhost:8080` in a browser. You will be redirected to the login page where you can enter the token. After successful authentication, a session cookie is set and all subsequent requests from that browser session are automatically authenticated.
+
+The session cookie:
+- Authenticates all same-origin requests (SPARQL queries, file uploads, etc.)
+- Expires after 3 months
+- Is not sent with cross-origin requests (for security)
 
 ### Proxied Endpoints
 
@@ -155,10 +169,28 @@ Client Request
 
 ## Security Notes
 
+### Token Security
+- Tokens are 128-bit cryptographically random (32 hex characters)
+- Token validation uses constant-time comparison to prevent timing attacks
 - The `.env` file contains the access token and should not be committed to version control
-- Tokens are validated using constant-time comparison
-- Session cookies are HTTP-only to prevent XSS attacks
-- For production use, deploy behind HTTPS reverse proxy
+
+### Cookie Security
+Session cookies have the following security attributes:
+- **HttpOnly**: Prevents JavaScript access (XSS protection)
+- **SameSite=Strict**: Prevents cross-site request forgery (CSRF)
+- **Secure**: Only sent over HTTPS (when `SECURE_COOKIES=true`)
+- **Max-Age**: Sessions expire after 3 months
+
+### CORS Policy
+- Cross-origin requests are allowed for SPARQL client compatibility
+- Credentials (cookies) are NOT sent with cross-origin requests
+- Cross-origin clients must authenticate via `X-Access-Token` or `Authorization: Bearer` headers
+- Same-origin browser requests use cookie authentication normally
+
+### Production Deployment
+- Always deploy behind an HTTPS reverse proxy (nginx, Caddy, etc.)
+- Keep `SECURE_COOKIES=true` (default) in production
+- Only set `SECURE_COOKIES=false` for local development without HTTPS
 
 ## License
 

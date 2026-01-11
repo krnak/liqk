@@ -8,7 +8,7 @@ use http::Method;
 use reqwest::Client;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use auth::{load_or_generate_config, login_page, login_submit};
@@ -21,6 +21,8 @@ pub struct AppState {
     pub access_token: String,
     pub oxigraph_url: String,
     pub client: Client,
+    /// Whether to set Secure flag on cookies (requires HTTPS)
+    pub secure_cookies: bool,
 }
 
 #[tokio::main]
@@ -33,32 +35,53 @@ async fn main() {
         )
         .init();
 
-    let (access_token, oxigraph_url) = load_or_generate_config();
+    let config = load_or_generate_config();
     let client = Client::new();
 
     let files_path = std::fs::canonicalize(files::FILES_DIR)
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| files::FILES_DIR.to_string());
 
+    let secure_mode = if config.secure_cookies { "HTTPS (Secure)" } else { "HTTP (Development)" };
+
     info!("┌──────────────────────────────────────────┐");
     info!("│         Oxigraph Gate Starting           │");
     info!("├──────────────────────────────────────────┤");
     info!("│ {:<40} │", format!("Listen:   http://{}", BIND_ADDR));
-    info!("│ {:<40} │", format!("Upstream: {}", oxigraph_url));
+    info!("│ {:<40} │", format!("Upstream: {}", config.oxigraph_url));
     info!("│ {:<40} │", format!("Files:    {}", files_path));
-    info!("│ {:<40} │", format!("Token:  {}", access_token));
+    info!("│ {:<40} │", format!("Mode:     {}", secure_mode));
+    info!("│ {:<40} │", format!("Token:  {}", config.access_token));
     info!("└──────────────────────────────────────────┘");
 
+    if !config.secure_cookies {
+        warn!("⚠️  Running in development mode (SECURE_COOKIES=false)");
+        warn!("⚠️  Cookies will be sent over HTTP - NOT SAFE FOR PRODUCTION");
+    }
+
     let state = Arc::new(AppState {
-        access_token,
-        oxigraph_url,
+        access_token: config.access_token,
+        oxigraph_url: config.oxigraph_url,
         client,
+        secure_cookies: config.secure_cookies,
     });
 
+    // CORS Configuration for SPARQL endpoint access
+    // - allow_origin(Any): Required for SPARQL clients from any domain
+    // - NOT setting allow_credentials: Cookies won't be sent cross-origin
+    //   (Cross-origin clients must use X-Access-Token or Authorization header)
+    // - This is safe because:
+    //   1. Browser won't send cookies with cross-origin requests by default
+    //   2. Cross-origin clients authenticate via headers, not cookies
+    //   3. Same-origin requests (from the gate's own UI) use cookies normally
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_origin(Any)
-        .allow_headers(Any);
+        .allow_headers(Any)
+        // Note: We explicitly do NOT call .allow_credentials(true)
+        // This prevents cross-origin requests from sending cookies
+        // Cross-origin SPARQL clients must use X-Access-Token header instead
+        ;
 
     let app = Router::new()
         .route("/gate/login", get(login_page))
