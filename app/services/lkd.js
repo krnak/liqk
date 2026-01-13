@@ -140,7 +140,7 @@ class LKDService {
   }
 
   /**
-   * List contents of a directory by path
+   * List contents of a directory by path (via SPARQL query)
    * @param {string} path - Directory path (e.g., "/" or "/upload")
    * @returns {Promise<Array>} Array of {uri, label, type, mimeType?, size?}
    */
@@ -194,25 +194,6 @@ class LKDService {
       mimeType: b.mimeType?.value,
       size: b.size?.value ? parseInt(b.size.value, 10) : undefined,
     }));
-  }
-
-  /**
-   * Get file content by path
-   * @param {string} path - File path
-   * @returns {Promise<string>} File content as text
-   */
-  async getFileContent(path) {
-    const response = await this.request(`/file${path}`);
-    return response.text();
-  }
-
-  /**
-   * Get file URL for direct access
-   * @param {string} path - File path
-   * @returns {string} Full URL with auth
-   */
-  getFileUrl(path) {
-    return `${this.baseUrl}/file${path}`;
   }
 
   /**
@@ -355,36 +336,48 @@ class LKDService {
   }
 
   /**
+   * Upload a file
+   * @param {string} filename - Original filename
+   * @param {Blob|string} content - File content (Blob or string)
+   * @param {string} mimeType - MIME type (default: text/markdown)
+   * @returns {Promise<string>} File UUID
+   */
+  async uploadFile(filename, content, mimeType = 'text/markdown') {
+    if (!this.accessToken) {
+      throw new Error('No access token configured');
+    }
+
+    const formData = new FormData();
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+    formData.append('files', blob, filename);
+
+    const response = await fetch(`${this.baseUrl}/res`, {
+      method: 'POST',
+      headers: {
+        'X-Access-Token': this.accessToken,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Access denied - insufficient permissions to upload');
+      }
+      throw new Error(`Upload failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.files[0].uuid;
+  }
+
+  /**
    * Upload a markdown file
    * @param {string} filename - Original filename
    * @param {string} content - File content
    * @returns {Promise<string>} File UUID
    */
   async uploadMarkdown(filename, content) {
-    if (!this.accessToken) {
-      throw new Error('No access token configured');
-    }
-
-    const formData = new FormData();
-    const blob = new Blob([content], { type: 'text/markdown' });
-    formData.append('file', blob, filename);
-
-    const response = await fetch(`${this.baseUrl}/upload`, {
-      method: 'POST',
-      headers: {
-        'X-Access-Token': this.accessToken,
-        'Accept': 'application/json',
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
-    }
-
-    // Parse JSON response to get file UUID
-    const result = await response.json();
-    return result.uuid;
+    return this.uploadFile(filename, content, 'text/markdown');
   }
 
   /**
@@ -393,8 +386,64 @@ class LKDService {
    * @returns {Promise<string>} File content
    */
   async getFileByUuid(uuid) {
-    const response = await this.request(`/res/${uuid}`);
-    return response.text();
+    try {
+      const response = await this.request(`/res/${uuid}`);
+      return response.text();
+    } catch (error) {
+      if (error.status === 403) {
+        throw new Error('Access denied - insufficient permissions to view this file');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get file as blob by UUID
+   * @param {string} uuid - File UUID
+   * @returns {Promise<Blob>} File content as Blob
+   */
+  async getFileBlobByUuid(uuid) {
+    try {
+      const response = await this.request(`/res/${uuid}`);
+      return response.blob();
+    } catch (error) {
+      if (error.status === 403) {
+        throw new Error('Access denied - insufficient permissions to view this file');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Update file content by UUID
+   * @param {string} uuid - File UUID
+   * @param {Blob|string} content - New file content
+   * @returns {Promise<void>}
+   */
+  async updateFileByUuid(uuid, content) {
+    if (!this.accessToken) {
+      throw new Error('No access token configured');
+    }
+
+    const body = content instanceof Blob ? content : new Blob([content]);
+
+    const response = await fetch(`${this.baseUrl}/res/${uuid}`, {
+      method: 'PUT',
+      headers: {
+        'X-Access-Token': this.accessToken,
+      },
+      body: body,
+    });
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Access denied - insufficient permissions to edit this file');
+      }
+      if (response.status === 404) {
+        throw new Error('File not found');
+      }
+      throw new Error(`Update failed: ${response.status}`);
+    }
   }
 
   /**

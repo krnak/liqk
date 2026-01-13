@@ -38,8 +38,9 @@ export default function App() {
     setActiveView(view);
   };
 
-  const handleFileOpen = (filePath) => {
-    setViewingFile(filePath);
+  const handleFileOpen = (file) => {
+    // file is { uuid, label }
+    setViewingFile(file);
   };
 
   const handleFileClose = () => {
@@ -57,7 +58,13 @@ export default function App() {
 
   const renderContent = () => {
     if (viewingFile) {
-      return <MarkdownViewer filePath={viewingFile} onClose={handleFileClose} />;
+      return (
+        <MarkdownViewer
+          uuid={viewingFile.uuid}
+          title={viewingFile.label}
+          onClose={handleFileClose}
+        />
+      );
     }
 
     switch (activeView) {

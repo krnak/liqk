@@ -9,20 +9,22 @@ import {
 } from 'react-native';
 import lkd from '../services/lkd';
 
-export default function MarkdownViewer({ filePath, onClose }) {
+export default function MarkdownViewer({ uuid, title, onClose }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadFile();
-  }, [filePath]);
+    if (uuid) {
+      loadFile();
+    }
+  }, [uuid]);
 
   const loadFile = async () => {
     setLoading(true);
     setError(null);
     try {
-      const text = await lkd.getFileContent(filePath);
+      const text = await lkd.getFileByUuid(uuid);
       setContent(text);
     } catch (err) {
       setError(err.message);
@@ -31,7 +33,7 @@ export default function MarkdownViewer({ filePath, onClose }) {
     }
   };
 
-  const fileName = filePath.split('/').pop();
+  const fileName = title || uuid;
 
   return (
     <View style={styles.container}>

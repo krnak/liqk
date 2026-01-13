@@ -71,15 +71,22 @@ function FilesystemBrowser({ currentPath, onNavigate, onFileOpen }) {
     );
   };
 
+  // Extract UUID from urn:uuid:xxx format
+  const getUuidFromUri = (uri) => {
+    return uri.replace('urn:uuid:', '');
+  };
+
   const handleItemPress = (item) => {
     if (item.type === 'directory') {
       const newPath =
         currentPath === '/' ? `/${item.label}` : `${currentPath}/${item.label}`;
       onNavigate(newPath);
     } else if (isMarkdown(item)) {
-      const filePath =
-        currentPath === '/' ? `/${item.label}` : `${currentPath}/${item.label}`;
-      onFileOpen(filePath);
+      // Pass UUID and label instead of file path
+      onFileOpen({
+        uuid: getUuidFromUri(item.uri),
+        label: item.label,
+      });
     }
   };
 
