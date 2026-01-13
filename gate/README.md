@@ -1,12 +1,12 @@
 # Oxigraph Gate
 
-An HTTP proxy service for [oxigraph-cli](https://github.com/oxigraph/oxigraph) that adds access token authentication.
+An HTTP proxy service for [oxigraph-cli](https://github.com/oxigraph/oxigraph) with RDF-based access control.
 
 ## Features
 
-- Token-based authentication for all oxigraph endpoints
-- Automatic token generation with 128-bit cryptographic entropy
-- Browser login page for manual token entry
+- RDF-based access control via policies in `http://liqk.org/graph/access`
+- Token authentication via SHA-256 hash lookup
+- Browser login page for session cookie setup
 - Cookie-based session persistence
 - Configurable upstream oxigraph URL
 - RDF-indexed file storage with upload/download endpoints
@@ -85,10 +85,10 @@ curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/query?query=SEL
 
 #### Browser Session (Cookie Authentication)
 
-Navigate to `http://localhost:8080` in a browser. You will be redirected to the login page where you can enter the token. After successful authentication, a session cookie is set and all subsequent requests from that browser session are automatically authenticated.
+Navigate to `http://localhost:8080/gate/login` in a browser to enter your token. After successful authentication, a session cookie is set and all subsequent requests from that browser session are automatically authenticated.
 
 The session cookie:
-- Authenticates all same-origin requests (SPARQL queries, file uploads, etc.)
+- Stores the token for RDF-based access control lookup
 - Expires after 3 months
 - Is not sent with cross-origin requests (for security)
 
@@ -228,15 +228,17 @@ Client Request
 │ Oxigraph    │ :8080
 │ Gate        │
 └─────┬───────┘
-      │ Token validated?
+      │ Access rank sufficient?
       │
-      ├─── No ──► /gate/login (HTML form)
+      ├─── No ──► 403 Forbidden
       │
       ▼ Yes
 ┌─────────────┐
 │ Oxigraph    │ :7878
 │ Server      │
 └─────────────┘
+
+/gate/login ──► Browser session setup (manual navigation)
 ```
 
 ## Security Notes
