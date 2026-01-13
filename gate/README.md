@@ -32,6 +32,7 @@ Configuration is stored in a `.env` file in the working directory.
 | `ACCESS_TOKEN` | 32-character hex string | Auto-generated |
 | `OXIGRAPH_URL` | Upstream oxigraph URL | `http://localhost:7878` |
 | `SECURE_COOKIES` | Set cookie Secure flag (requires HTTPS) | `true` |
+| `FILES_DIR` | Directory for file storage | `../files` |
 
 If no valid token exists on startup, a new one is generated and saved to `.env`.
 
@@ -41,6 +42,7 @@ If no valid token exists on startup, a new one is generated and saved to `.env`.
 ```
 ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 OXIGRAPH_URL=http://localhost:7878
+FILES_DIR=/var/lib/liqk/files
 ```
 
 **Development (local HTTP only):**
@@ -48,6 +50,7 @@ OXIGRAPH_URL=http://localhost:7878
 ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 OXIGRAPH_URL=http://localhost:7878
 SECURE_COOKIES=false
+FILES_DIR=../files
 ```
 
 ## Usage
@@ -149,7 +152,7 @@ Navigate to `/file/` in a browser (after login) to browse the virtual filesystem
 
 #### Storage Details
 
-- Files are stored in `../files/` relative to the working directory
+- Files are stored in the directory specified by `FILES_DIR` (default: `../files/`)
 - Each file is renamed to `{uuid}.{extension}` on disk
 - Metadata (original name, size, MIME type, timestamp) is stored in Oxigraph
 - Maximum upload size: 4 GB

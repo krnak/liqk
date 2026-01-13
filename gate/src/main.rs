@@ -23,6 +23,8 @@ pub struct AppState {
     pub client: Client,
     /// Whether to set Secure flag on cookies (requires HTTPS)
     pub secure_cookies: bool,
+    /// Directory for file storage
+    pub files_dir: String,
 }
 
 #[tokio::main]
@@ -38,9 +40,9 @@ async fn main() {
     let config = load_or_generate_config();
     let client = Client::new();
 
-    let files_path = std::fs::canonicalize(files::FILES_DIR)
+    let files_path = std::fs::canonicalize(&config.files_dir)
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| files::FILES_DIR.to_string());
+        .unwrap_or_else(|_| config.files_dir.clone());
 
     let secure_mode = if config.secure_cookies { "HTTPS (Secure)" } else { "HTTP (Development)" };
 
@@ -64,6 +66,7 @@ async fn main() {
         oxigraph_url: config.oxigraph_url,
         client,
         secure_cookies: config.secure_cookies,
+        files_dir: config.files_dir,
     });
 
     // CORS Configuration for SPARQL endpoint access

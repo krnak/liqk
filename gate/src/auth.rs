@@ -20,12 +20,16 @@ pub const TOKEN_COOKIE_NAME: &str = "oxigraph_gate_token";
 /// Session cookie max age in seconds (3 months / ~90 days)
 pub const SESSION_MAX_AGE_SECS: i64 = 7_776_000;
 
+pub const DEFAULT_FILES_DIR: &str = "../files";
+
 /// Configuration loaded from environment
 pub struct GateConfig {
     pub access_token: String,
     pub oxigraph_url: String,
     /// Whether to set Secure flag on cookies (requires HTTPS)
     pub secure_cookies: bool,
+    /// Directory for file storage
+    pub files_dir: String,
 }
 
 pub fn load_or_generate_config() -> GateConfig {
@@ -38,6 +42,8 @@ pub fn load_or_generate_config() -> GateConfig {
     let secure_cookies = env::var("SECURE_COOKIES")
         .map(|v| v.to_lowercase() != "false")
         .unwrap_or(true);
+
+    let files_dir = env::var("FILES_DIR").unwrap_or_else(|_| DEFAULT_FILES_DIR.to_string());
 
     let access_token = match env::var("ACCESS_TOKEN") {
         Ok(token) if token.len() == 32 && token.chars().all(|c| c.is_ascii_hexdigit()) => token,
@@ -52,6 +58,7 @@ pub fn load_or_generate_config() -> GateConfig {
         access_token,
         oxigraph_url,
         secure_cookies,
+        files_dir,
     }
 }
 

@@ -14,7 +14,6 @@ use crate::auth::validate_token;
 use crate::templates::{upload_success_html, UPLOAD_HTML};
 use crate::AppState;
 
-pub const FILES_DIR: &str = "../files";
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024 * 1024 * 1024; // 4 GB
 const FILESYSTEM_GRAPH: &str = "http://liqk.org/graph/filesystem";
 
@@ -625,7 +624,7 @@ pub async fn file_handler(
     };
 
     // Read file from disk
-    let file_path = PathBuf::from(FILES_DIR).join(&stored_filename);
+    let file_path = PathBuf::from(&state.files_dir).join(&stored_filename);
 
     match tokio::fs::read(&file_path).await {
         Ok(contents) => {
@@ -684,7 +683,7 @@ pub async fn res_handler(
     };
 
     // Read file from disk
-    let file_path = PathBuf::from(FILES_DIR).join(&stored_filename);
+    let file_path = PathBuf::from(&state.files_dir).join(&stored_filename);
 
     match tokio::fs::read(&file_path).await {
         Ok(contents) => {
@@ -773,7 +772,7 @@ pub async fn res_put_handler(
     };
 
     // Write new content to disk
-    let file_path = PathBuf::from(FILES_DIR).join(&stored_filename);
+    let file_path = PathBuf::from(&state.files_dir).join(&stored_filename);
     let file_size = body.len();
 
     if let Err(e) = tokio::fs::write(&file_path, &body).await {
@@ -835,7 +834,7 @@ pub async fn upload_handler(
         }
     };
 
-    let files_dir = PathBuf::from(FILES_DIR);
+    let files_dir = PathBuf::from(&state.files_dir);
     if let Err(e) = tokio::fs::create_dir_all(&files_dir).await {
         warn!(client = %addr, error = %e, "Failed to create files directory");
         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create files directory").into_response();
