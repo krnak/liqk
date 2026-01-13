@@ -109,10 +109,7 @@ The gate includes an RDF-indexed file storage system. Files are stored on disk a
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/upload` | GET | Upload form page |
-| `/upload` | POST | Upload files (multipart/form-data) |
-| `/file/` | GET | Browse root directory |
-| `/file/{path}` | GET | Browse directory or download file by path |
+| `/res` | POST | Upload new files (multipart/form-data) |
 | `/res/{uuid}` | GET | Download file by UUID |
 | `/res/{uuid}` | PUT | Replace file content (keeping same UUID) |
 
@@ -121,10 +118,10 @@ The gate includes an RDF-indexed file storage system. Files are stored on disk a
 ```bash
 # Upload via curl
 curl -X POST -H "X-Access-Token: YOUR_TOKEN" \
-  -F "file=@document.pdf" \
-  http://localhost:8080/upload
+  -F "files=@document.pdf" \
+  http://localhost:8080/res
 
-# Response (JSON if Accept: application/json)
+# Response (JSON)
 {"success":true,"files":[{"filename":"document.pdf","uuid":"550e8400-e29b-41d4-a716-446655440000"}]}
 ```
 
@@ -146,16 +143,33 @@ curl -X PUT -H "X-Access-Token: YOUR_TOKEN" \
 
 The file content is replaced while keeping the same UUID. The file size is updated in the RDF metadata.
 
-#### Browse Files
-
-Navigate to `/file/` in a browser (after login) to browse the virtual filesystem. Files are organized in directories defined in the RDF graph.
-
 #### Storage Details
 
 - Files are stored in the directory specified by `FILES_DIR` (default: `../files/`)
 - Each file is renamed to `{uuid}.{extension}` on disk
 - Metadata (original name, size, MIME type, timestamp) is stored in Oxigraph
 - Maximum upload size: 4 GB
+
+### Access Control
+
+Access is controlled via RDF-based policies stored in the `http://liqk.org/graph/access` graph. See [liqk-schema.md](../liqk-schema.md) for the full access vocabulary.
+
+| Endpoint | Resource | Required Rank |
+|----------|----------|---------------|
+| `/`, `/query` | `<http://liqk.org/graph>` | 1 (view) |
+| `/update` | `<http://liqk.org/graph>` | 3 (edit) |
+| `POST /res` | `<http://liqk.org/schema#action-upload-file>` | 3 (edit) |
+| `GET /res/{uuid}` | `<urn:uuid:{uuid}>` | 1 (view) |
+| `PUT /res/{uuid}` | `<urn:uuid:{uuid}>` | 3 (edit) |
+
+Access ranks:
+- **4** (admin): Full administrative access
+- **3** (edit): Can modify data
+- **2** (comment): Can add comments
+- **1** (view): Read-only access
+- **0** (none): No access
+
+Tokens are authenticated via SHA-256 hash comparison against stored `liqk:AccessToken` resources.
 
 ## Logging
 

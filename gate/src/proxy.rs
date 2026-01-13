@@ -1,14 +1,25 @@
 use axum::{
     extract::{ConnectInfo, Request, State},
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::cookie::CookieJar;
 use std::{net::SocketAddr, sync::Arc};
 use tracing::{info, warn};
 
-use crate::auth::validate_token;
+use crate::files::get_access_rank_iri;
 use crate::AppState;
+
+const GRAPH_IRI: &str = "http://liqk.org/graph";
+
+/// Determine the minimum required access rank for a given path
+fn required_rank_for_path(path: &str) -> i32 {
+    if path.to_lowercase().starts_with("/update") {
+        3 // edit access required for SPARQL update
+    } else {
+        1 // view access required for all other endpoints
+    }
+}
 
 pub async fn proxy_handler(
     State(state): State<Arc<AppState>>,
@@ -23,17 +34,26 @@ pub async fn proxy_handler(
         .map(|pq| pq.as_str())
         .unwrap_or("/");
 
-    if !validate_token(&state, req.headers(), &jar) {
+    // Extract just the path (without query string) for access check
+    let path = uri.path();
+
+    let headers = req.headers().clone();
+
+    // Check access rank on the graph IRI
+    let rank = get_access_rank_iri(&state.client, &state.oxigraph_url, GRAPH_IRI, &headers, &jar).await;
+    let required_rank = required_rank_for_path(path);
+
+    if rank < required_rank {
         warn!(
             client = %addr,
             method = %method,
             path = %path_and_query,
-            "Unauthorized request - redirecting to login"
+            rank = rank,
+            required = required_rank,
+            "Access denied - insufficient rank"
         );
-        return (StatusCode::SEE_OTHER, [(header::LOCATION, "/gate/login")]).into_response();
+        return (StatusCode::FORBIDDEN, "Access denied").into_response();
     }
-
-    let headers = req.headers().clone();
     let target_url = format!("{}{}", state.oxigraph_url, path_and_query);
 
     let body_bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {

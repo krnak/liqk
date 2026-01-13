@@ -91,28 +91,6 @@ pub fn extract_token_from_header(headers: &HeaderMap) -> Option<String> {
         })
 }
 
-/// Validate token using constant-time comparison to prevent timing attacks.
-///
-/// Accepts tokens from:
-/// 1. X-Access-Token header
-/// 2. Authorization: Bearer header
-/// 3. Session cookie (oxigraph_gate_token)
-pub fn validate_token(state: &AppState, headers: &HeaderMap, jar: &CookieJar) -> bool {
-    if let Some(token) = extract_token_from_header(headers) {
-        if constant_time_compare(&token, &state.access_token) {
-            return true;
-        }
-    }
-
-    if let Some(cookie) = jar.get(TOKEN_COOKIE_NAME) {
-        if constant_time_compare(cookie.value(), &state.access_token) {
-            return true;
-        }
-    }
-
-    false
-}
-
 /// Constant-time string comparison to prevent timing attacks.
 /// Both strings are compared in their entirety regardless of where they differ.
 fn constant_time_compare(a: &str, b: &str) -> bool {
