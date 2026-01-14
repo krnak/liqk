@@ -4,124 +4,124 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Liqk is a multi-platform task management and knowledge database application with:
-- **React Native frontend** (Expo) - cross-platform web/iOS/Android app
-- **Rust HTTP proxy gateway** (gate) - authentication layer for Oxigraph
-- **Post-quantum crypto tool** (liqk-crypto) - file encryption CLI
-- **RDF triple-store** (Oxigraph) - semantic data storage
+Liqk is a task management and knowledge database application with:
+- **React Native (Expo) frontend** - cross-platform app (`app/`)
+- **Rust HTTP proxy gateway** - authentication and file storage (`gate/`)
+- **Post-quantum crypto utility** - file encryption tool (`liqk-crypto/`)
+- **Oxigraph** - RDF triple store database (external dependency)
 
-## Common Commands
+All data is modeled as RDF triples using SPARQL queries. Access control is enforced via RDF-based policies.
+
+## Build & Run Commands
+
+### Prerequisites
+```bash
+pacman -S zip
+cargo install oxigraph-cli
+```
+
+### Full Stack Development
+```bash
+# Terminal 1: Oxigraph database
+oxigraph serve --location ./oxidata
+
+# Terminal 2: Gate proxy
+cd gate && cargo build --release
+./target/release/oxigraph-gate
+
+# Terminal 3: App
+cd app && npm install && npm run web
+```
 
 ### Frontend (app/)
 ```bash
-cd app
-npm install
-npm start          # Start Expo dev server
-npm run web        # Run in browser
-npm run android    # Run on Android
-npm run ios        # Run on iOS
+npm install              # Install dependencies
+npm start                # Expo dev server (press w/a/i for platform)
+npm run web              # Web browser
+npm run android          # Android via Expo Go
+npm run ios              # iOS via Expo Go
+
+# Production builds
+eas build --platform android --profile preview     # APK
+eas build --platform android --profile production  # AAB for Play Store
 ```
 
 ### Gateway (gate/)
 ```bash
-cd gate
-cargo build --release
-RUST_LOG=debug ./target/release/oxigraph-gate    # Run with debug logging
-cargo test
+cargo build --release    # Compile
+cargo test               # Run tests
+RUST_LOG=debug ./target/release/oxigraph-gate  # Run with debug logging
 ```
 
 ### Crypto Tool (liqk-crypto/)
 ```bash
-cd liqk-crypto
 cargo build --release
-cargo test                                        # Run all tests
+cargo test
+
+# CLI usage
 ./target/release/liqk-crypto keygen --sk sk.pem --pk pk.pem
 ./target/release/liqk-crypto encrypt --pk pk.pem --input file.txt --output file.bin
 ./target/release/liqk-crypto decrypt --sk sk.pem --input file.bin --output file.txt
 ```
 
-### Full Stack Development
-```bash
-# Terminal 1: Start Oxigraph database
-oxigraph serve --location ./oxidata
-
-# Terminal 2: Start the gateway (from repo root)
-./gate/target/release/oxigraph-gate
-
-# Terminal 3: Start the app
-cd app && npm start
-```
-
 ## Architecture
 
-### Data Flow
 ```
-React Native App ──► Gate Proxy (8080) ──► Oxigraph (7878)
-                         │
-                         ▼
-                    files/ directory
+React Native App (:web)
+       │
+       │ X-Access-Token header
+       ▼
+Oxigraph Gate (:8080)     ──► File Storage (files/)
+       │
+       │ SPARQL proxy
+       ▼
+Oxigraph Server (:7878)
+       │
+       ▼
+RDF Database (oxidata/)
 ```
 
 ### RDF Graphs
+- `http://liqk.org/graph/kairos` - Tasks and projects
 - `http://liqk.org/graph/filesystem` - File metadata (POSIX ontology)
-- `http://liqk.org/graph/kairos` - Task/project data
+- `http://liqk.org/graph/access` - Access control policies
 
-### Authentication
-- Token-based: 32-char hex string in `gate/.env`
-- Methods: `X-Access-Token` header, `Authorization: Bearer`, or browser cookies
-- Token validation uses constant-time comparison
+### Namespace
+- **Prefix:** `liqk:`
+- **URI:** `http://liqk.org/schema#`
 
-### LKD Service (app/services/lkd.js)
-Client-side API wrapper handling:
-- Token storage via AsyncStorage
-- SPARQL query execution
-- File upload/download
-- Directory browsing at `/file/{path}`
+### Key Classes
+- `liqk:Task` - Work items with priority, status, project links
+- `liqk:Project` - Task groupings with status and readme
+- `liqk:AccessPolicy` - Permission grants (public or token-based)
+- `liqk:AccessToken` - Auth tokens (SHA-256 hashed)
+- `liqk:ModifyAction` - Audit trail for property changes
 
-## Schema (liqk-schema.md)
+### Access Control
+Tokens are validated via SHA-256 hash lookup against `liqk:AccessToken` resources. Access ranks:
+- 4 (admin), 3 (edit), 2 (comment), 1 (view), 0 (none)
 
-Namespace: `http://liqk.org/schema#` (prefix: `liqk:`)
+## Key Files
 
-**Classes**: Project, Task, ModifyAction (audit trail)
+### Frontend
+- `app/App.js` - Root component with routing
+- `app/services/lkd.js` - Backend API wrapper (SPARQL queries, file ops)
+- `app/views/TasksView.js` - Main task/project UI
+- `app/components/Sidebar.js` - Navigation and file browser
 
-**Key predicates**: priority, project, readme, status, title, task-status, abbrv
+### Gateway
+- `gate/src/main.rs` - Server setup and Axum router
+- `gate/src/files.rs` - File upload/download with RDF indexing
+- `gate/src/auth.rs` - Token validation and cookie handling
+- `gate/src/proxy.rs` - Oxigraph request forwarding
 
-**Priority values** (ranked 6→1): priority-highest, priority-high, priority-medium, priority-pinned, priority-none, priority-low
+### Configuration
+- `gate/.env` - ACCESS_TOKEN, OXIGRAPH_URL, SECURE_COOKIES, FILES_DIR
+- `.env` (root) - Shared config
 
-**Project statuses**: project-status-completed, project-status-focus, project-status-inactive, project-status-life-long, project-status-peripheral
+## Documentation
 
-**Task statuses**: task-status-done, task-status-hall-of-fame, task-status-not-started, task-status-trashed
-
-## File Storage
-
-Files stored in `files/` as `{uuid}.{extension}`. Metadata (original name, size, MIME type) stored in RDF, not on disk.
-
-**Endpoints**:
-- `GET /file/{path}` - Browse/download by path
-- `GET /res/{uuid}` - Download by UUID
-- `PUT /res/{uuid}` - Replace file content
-- `POST /upload` - Upload files
-
-## Configuration
-
-### gate/.env
-```
-ACCESS_TOKEN=<32-char-hex>
-OXIGRAPH_URL=http://localhost:7878
-SECURE_COOKIES=true      # false for local dev without HTTPS
-FILES_DIR=../files       # directory for file storage
-```
-
-### Root .env (Backblaze backup)
-```
-BACKBLAZE_KEY_ID=...
-BACKBLAZE_APPLICATION_KEY=...
-BACKBLAZE_BUCKET=liqk00
-BACKBLAZE_ENDPOINT=https://s3.eu-central-003.backblazeb2.com
-```
-
-## Security Notes
-
-- SPARQL injection prevention implemented in gate
-- Cookie security: HttpOnly, SameSite=Strict, Secure flag
-- liqk-crypto uses X-Wing KEM (post-quantum hybrid: ML-KEM 768 + X25519) + ChaCha20Poly1305
+- `liqk-schema.md` - RDF ontology and access control vocabulary
+- `filesystem.md` - File storage architecture and POSIX ontology
+- `gate/README.md` - Gateway API, authentication, and security details
+- `app/README.md` - Expo development and build profiles
