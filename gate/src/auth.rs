@@ -5,12 +5,11 @@ use axum::{
     Form,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use rand::RngCore;
 use serde::Deserialize;
-use std::{env, fs, net::SocketAddr, sync::Arc};
-use subtle::ConstantTimeEq;
+use std::{env, net::SocketAddr, sync::Arc};
 use tracing::{info, warn};
 
+use crate::files::{hash_token, verify_token_exists};
 use crate::templates::{LOGIN_ERROR_HTML, LOGIN_HTML};
 use crate::AppState;
 
@@ -24,7 +23,6 @@ pub const DEFAULT_FILES_DIR: &str = "../files";
 
 /// Configuration loaded from environment
 pub struct GateConfig {
-    pub access_token: String,
     pub oxigraph_url: String,
     /// Whether to set Secure flag on cookies (requires HTTPS)
     pub secure_cookies: bool,
@@ -32,7 +30,7 @@ pub struct GateConfig {
     pub files_dir: String,
 }
 
-pub fn load_or_generate_config() -> GateConfig {
+pub fn load_config() -> GateConfig {
     let _ = dotenvy::from_filename(ENV_FILE);
 
     let oxigraph_url = env::var("OXIGRAPH_URL").unwrap_or_else(|_| DEFAULT_OXIGRAPH_URL.to_string());
@@ -45,35 +43,10 @@ pub fn load_or_generate_config() -> GateConfig {
 
     let files_dir = env::var("FILES_DIR").unwrap_or_else(|_| DEFAULT_FILES_DIR.to_string());
 
-    let access_token = match env::var("ACCESS_TOKEN") {
-        Ok(token) if token.len() == 32 && token.chars().all(|c| c.is_ascii_hexdigit()) => token,
-        _ => {
-            let token = generate_token();
-            save_env_file(&token, &oxigraph_url);
-            token
-        }
-    };
-
     GateConfig {
-        access_token,
         oxigraph_url,
         secure_cookies,
         files_dir,
-    }
-}
-
-fn generate_token() -> String {
-    let mut bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    hex::encode(bytes)
-}
-
-fn save_env_file(token: &str, oxigraph_url: &str) {
-    let content = format!("ACCESS_TOKEN={}\nOXIGRAPH_URL={}\n", token, oxigraph_url);
-    if let Err(e) = fs::write(ENV_FILE, content) {
-        warn!("Failed to write .env file: {}", e);
-    } else {
-        info!("Generated new access token and saved to .env");
     }
 }
 
@@ -91,24 +64,6 @@ pub fn extract_token_from_header(headers: &HeaderMap) -> Option<String> {
         })
 }
 
-/// Constant-time string comparison to prevent timing attacks.
-/// Both strings are compared in their entirety regardless of where they differ.
-fn constant_time_compare(a: &str, b: &str) -> bool {
-    let a_bytes = a.as_bytes();
-    let b_bytes = b.as_bytes();
-
-    // Length check must also be constant-time
-    // We pad the shorter one to match lengths, but still reject if lengths differ
-    if a_bytes.len() != b_bytes.len() {
-        // Still do a comparison to maintain constant time, but always return false
-        let dummy = vec![0u8; a_bytes.len().max(b_bytes.len())];
-        let _ = a_bytes.ct_eq(&dummy[..a_bytes.len()]);
-        return false;
-    }
-
-    a_bytes.ct_eq(b_bytes).into()
-}
-
 pub async fn login_page() -> Html<&'static str> {
     Html(LOGIN_HTML)
 }
@@ -124,7 +79,11 @@ pub async fn login_submit(
     jar: CookieJar,
     Form(form): Form<LoginForm>,
 ) -> Response {
-    if constant_time_compare(&form.token, &state.access_token) {
+    // Hash the submitted token and verify it exists in the RDF access graph
+    let token_hash = hash_token(&form.token);
+    let token_exists = verify_token_exists(&state.client, &state.oxigraph_url, &token_hash).await;
+
+    if token_exists {
         info!(client = %addr, "Login successful");
 
         // Build secure cookie with all security flags

@@ -40,7 +40,7 @@ fn validate_uuid(s: &str) -> Option<Uuid> {
 }
 
 /// Hash a token using SHA-256
-fn hash_token(token: &str) -> String {
+pub fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
     hex::encode(hasher.finalize())
@@ -215,6 +215,55 @@ async fn execute_access_query(
         .unwrap_or(0);
 
     Ok(rank)
+}
+
+/// Verify if a token hash exists in the RDF access graph
+pub async fn verify_token_exists(
+    client: &reqwest::Client,
+    oxigraph_url: &str,
+    token_hash: &str,
+) -> bool {
+    let query = format!(
+        r#"PREFIX liqk: <http://liqk.org/schema#>
+
+ASK
+FROM <{access_graph}>
+WHERE {{
+  ?token a liqk:AccessToken ;
+         liqk:token-hash "{token_hash}" .
+}}"#,
+        access_graph = ACCESS_GRAPH,
+        token_hash = escape_sparql_string(token_hash),
+    );
+
+    let query_url = format!("{}/query", oxigraph_url);
+
+    let response = match client
+        .post(&query_url)
+        .header("Content-Type", "application/sparql-query")
+        .header("Accept", "application/sparql-results+json")
+        .body(query)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(_) => return false,
+    };
+
+    if !response.status().is_success() {
+        return false;
+    }
+
+    let body = match response.text().await {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+
+    // ASK queries return {"boolean": true/false}
+    serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|json| json.get("boolean")?.as_bool())
+        .unwrap_or(false)
 }
 
 /// Get maximum access rank for a resource (combining public and token access)

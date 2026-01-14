@@ -11,14 +11,13 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use auth::{load_or_generate_config, login_page, login_submit};
+use auth::{load_config, login_page, login_submit};
 use files::{res_handler, res_post_handler, res_put_handler};
 use proxy::proxy_handler;
 
 const BIND_ADDR: &str = "0.0.0.0:8080";
 
 pub struct AppState {
-    pub access_token: String,
     pub oxigraph_url: String,
     pub client: Client,
     /// Whether to set Secure flag on cookies (requires HTTPS)
@@ -37,7 +36,7 @@ async fn main() {
         )
         .init();
 
-    let config = load_or_generate_config();
+    let config = load_config();
     let client = Client::new();
 
     let files_path = std::fs::canonicalize(&config.files_dir)
@@ -53,7 +52,6 @@ async fn main() {
     info!("│ {:<40} │", format!("Upstream: {}", config.oxigraph_url));
     info!("│ {:<40} │", format!("Files:    {}", files_path));
     info!("│ {:<40} │", format!("Mode:     {}", secure_mode));
-    info!("│ {:<40} │", format!("Token:  {}", config.access_token));
     info!("└──────────────────────────────────────────┘");
 
     if !config.secure_cookies {
@@ -62,7 +60,6 @@ async fn main() {
     }
 
     let state = Arc::new(AppState {
-        access_token: config.access_token,
         oxigraph_url: config.oxigraph_url,
         client,
         secure_cookies: config.secure_cookies,
