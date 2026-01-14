@@ -29,7 +29,6 @@ Configuration is stored in a `.env` file in the working directory.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ACCESS_TOKEN` | 32-character hex string | Auto-generated |
 | `OXIGRAPH_URL` | Upstream oxigraph URL | `http://localhost:7878` |
 | `SECURE_COOKIES` | Set cookie Secure flag (requires HTTPS) | `true` |
 | `FILES_DIR` | Directory for file storage | `../files` |
@@ -40,14 +39,12 @@ If no valid token exists on startup, a new one is generated and saved to `.env`.
 
 **Production (behind HTTPS proxy):**
 ```
-ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 OXIGRAPH_URL=http://localhost:7878
 FILES_DIR=/var/lib/liqk/files
 ```
 
 **Development (local HTTP only):**
 ```
-ACCESS_TOKEN=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 OXIGRAPH_URL=http://localhost:7878
 SECURE_COOKIES=false
 FILES_DIR=../files
@@ -183,7 +180,6 @@ INFO          Oxigraph Gate Starting
 INFO  ========================================
 INFO  Listen URL:    http://0.0.0.0:8080
 INFO  Oxigraph URL:  http://localhost:7878
-INFO  Access Token:  a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
 INFO  ========================================
 ```
 
@@ -242,11 +238,6 @@ Client Request
 ```
 
 ## Security Notes
-
-### Token Security
-- Tokens are 128-bit cryptographically random (32 hex characters)
-- Token validation uses constant-time comparison to prevent timing attacks
-- The `.env` file contains the access token and should not be committed to version control
 
 ### Cookie Security
 Session cookies have the following security attributes:
