@@ -6,19 +6,21 @@ The gate service provides file storage with RDF metadata indexing in Oxigraph.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/file` | List root directory |
-| GET | `/file/{path}` | Retrieve file or list directory |
-| GET | `/res/{uuid}` | Retrieve a file directly by UUID |
-| GET | `/upload` | HTML upload form |
-| POST | `/upload` | Upload files to the `upload` directory |
+| POST | `/res` | Upload new files (multipart/form-data) |
+| GET | `/res/{uuid}` | Download file by UUID |
+| PUT | `/res/{uuid}` | Replace file content (keeping same UUID) |
 
 All endpoints require authentication via access token (header or cookie).
 
-If `/file/{path}` points to a directory, returns an HTML listing with clickable `.` (current), `..` (parent), and all entries.
+| Endpoint | Resource | Required Rank |
+|----------|----------|---------------|
+| `POST /res` | `<http://liqk.org/schema#action-upload-file>` | 3 (edit) |
+| `GET /res/{uuid}` | `<urn:uuid:{uuid}>` | 1 (view) |
+| `PUT /res/{uuid}` | `<urn:uuid:{uuid}>` | 3 (edit) |
 
 ## Storage
 
-Files are stored in the `files/` directory with UUID-based names:
+Files are stored in the directory specified by `FILES_DIR` (default: `../files/`) with UUID-based names:
 ```
 files/
   {uuid}.{extension}
@@ -26,7 +28,7 @@ files/
   ...
 ```
 
-Original filenames are preserved in RDF metadata, not on disk.
+Original filenames are preserved in RDF metadata, not on disk. Maximum upload size: 4 GB.
 
 ## RDF Graph
 
@@ -80,35 +82,21 @@ When a file is uploaded, the following triples are created:
 | `dc:created` | Upload timestamp (ISO 8601) |
 | `liqk:storedAs` | Actual filename on disk |
 
-## Path Resolution
+## UUID Resolution
 
-When requesting `/file/upload/document.pdf`:
+When requesting `/res/{uuid}`:
 
-1. Split path into segments: `["upload", "document.pdf"]`
-2. Find root directory: `?root rdfs:label "/"`
-3. Traverse directories by label via `posix:includes`
-4. Find file with matching `rdfs:label`
-5. Read `liqk:storedAs` to get disk filename
-6. Serve file from `files/{storedAs}`
+1. Look up `liqk:storedAs` for `<urn:uuid:{uuid}>`
+2. Serve file from `files/{storedAs}`
 
-Returns 404 if path doesn't exist in the graph.
+Returns 404 if UUID doesn't exist in the graph.
 
 ### Example Query
 
-For path `/file/upload/document.pdf`:
-
 ```sparql
-PREFIX posix: <http://www.w3.org/ns/posix/stat#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX liqk: <http://liqk.org/schema#>
 
 SELECT ?storedAs FROM <http://liqk.org/graph/filesystem> WHERE {
-    ?root a posix:Directory ;
-          rdfs:label "/" .
-    ?root posix:includes ?dir0 .
-    ?dir0 rdfs:label "upload" .
-    ?dir0 posix:includes ?file .
-    ?file rdfs:label "document.pdf" .
-    ?file liqk:storedAs ?storedAs .
+    <urn:uuid:550e8400-e29b-41d4-a716-446655440000> liqk:storedAs ?storedAs .
 }
 ```
