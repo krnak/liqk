@@ -5,3 +5,4 @@ backups
 pk.pem
 sk.pem
 tokens.txt
+claude-token
