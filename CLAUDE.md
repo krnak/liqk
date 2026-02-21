@@ -103,6 +103,8 @@ cd app && npm run ios             # iOS via Expo Go
 
 Tokens are 16-byte hex strings. The gate hashes them with SHA-256 and looks up `liqk:AccessToken` resources in the access graph. Authentication methods: `X-Access-Token` header, `Authorization: Bearer` header, or `oxigraph_gate_token` session cookie. Access policies map tokens to resources with ranked permission levels (0=none through 4=admin).
 
+The access token for the production server (`liqk.kairos.to`) is stored in the `claude-token` file at the repo root.
+
 ## Deployment
 
 The production server is `liqk.kairos.to`. Nginx reverse-proxies port 80 to gate on :8080. Deploy commands are in `server.md` (scp binaries, .env, and nginx config to the server).
