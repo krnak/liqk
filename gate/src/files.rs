@@ -578,6 +578,77 @@ pub async fn res_put_handler(
     (StatusCode::OK, format!("File updated ({} bytes)", file_size)).into_response()
 }
 
+/// DELETE /res/:uuid - Delete file by UUID
+pub async fn res_delete_handler(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    Path(uuid_str): Path<String>,
+) -> Response {
+    let uuid = match validate_uuid(&uuid_str) {
+        Some(u) => u,
+        None => {
+            warn!(client = %addr, uuid = %uuid_str, "Invalid UUID format");
+            return (StatusCode::BAD_REQUEST, "Invalid UUID format").into_response();
+        }
+    };
+
+    // Check access rank (requires >= 3 for edit/delete)
+    let rank = get_access_rank(&state.client, &state.oxigraph_url, &uuid, &headers, &jar).await;
+    if rank < 3 {
+        warn!(client = %addr, uuid = %uuid, rank = rank, "Access denied - insufficient rank for delete");
+        return (StatusCode::FORBIDDEN, "Access denied - delete requires edit access level").into_response();
+    }
+
+    let stored_filename = match lookup_file_by_uuid(&state.client, &state.oxigraph_url, &uuid.to_string()).await {
+        Ok(Some(name)) => name,
+        Ok(None) => {
+            warn!(client = %addr, uuid = %uuid, "File not found");
+            return (StatusCode::NOT_FOUND, "File not found").into_response();
+        }
+        Err(e) => {
+            warn!(client = %addr, uuid = %uuid, error = %e, "SPARQL lookup failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to lookup file").into_response();
+        }
+    };
+
+    // Delete all RDF triples for this file from the filesystem graph
+    let uuid_urn = format!("urn:uuid:{}", uuid);
+    let delete_query = format!(
+        r#"DELETE WHERE {{ GRAPH <{graph}> {{ <{urn}> ?p ?o }} }};
+DELETE WHERE {{ GRAPH <{graph}> {{ ?s <http://www.w3.org/ns/posix/stat#includes> <{urn}> }} }}"#,
+        graph = FILESYSTEM_GRAPH,
+        urn = uuid_urn,
+    );
+
+    if let Err(e) = send_sparql_update(&state.client, &state.oxigraph_url, &delete_query).await {
+        warn!(client = %addr, uuid = %uuid, error = %e, "Failed to delete RDF triples");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to delete file metadata").into_response();
+    }
+
+    // Delete the file from disk
+    let file_path = PathBuf::from(&state.files_dir).join(&stored_filename);
+    if let Err(e) = tokio::fs::remove_file(&file_path).await {
+        warn!(client = %addr, uuid = %uuid, stored_as = %stored_filename, error = %e, "Failed to delete file from disk");
+        // RDF already deleted, report partial failure
+        return (StatusCode::INTERNAL_SERVER_ERROR, "File metadata deleted but failed to remove file from disk").into_response();
+    }
+
+    info!(client = %addr, uuid = %uuid, rank = rank, stored_as = %stored_filename, "File deleted");
+
+    let json_response = serde_json::json!({
+        "success": true,
+        "uuid": uuid.to_string()
+    });
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        json_response.to_string(),
+    ).into_response()
+}
+
 const UPLOAD_ACTION_IRI: &str = "http://liqk.org/schema#action-upload-file";
 
 /// POST /res - Upload new file

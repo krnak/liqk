@@ -12,7 +12,7 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use auth::{load_config, login_page, login_submit};
-use files::{res_handler, res_post_handler, res_put_handler};
+use files::{res_handler, res_delete_handler, res_post_handler, res_put_handler};
 use proxy::proxy_handler;
 
 const BIND_ADDR: &str = "0.0.0.0:8080";
@@ -87,7 +87,7 @@ async fn main() {
         .route("/gate/login", get(login_page))
         .route("/gate/login", post(login_submit))
         .route("/res", post(res_post_handler))
-        .route("/res/:uuid", get(res_handler).put(res_put_handler))
+        .route("/res/:uuid", get(res_handler).put(res_put_handler).delete(res_delete_handler))
         .fallback(proxy_handler)
         .layer(cors)
         .with_state(state);
