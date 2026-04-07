@@ -225,6 +225,29 @@ class LKDService {
   }
 
   /**
+   * Get tasks with not-started status
+   * @returns {Promise<Array>} Array of not-started tasks ordered by priority desc
+   */
+  async getTodoTasks(projectUri = null) {
+    const projectFilter = projectUri ? `?task liqk:project <${projectUri}> .` : '';
+    const sparql = `${PREFIXES}
+      SELECT ?task ?title ?priority ?priorityRank ?status ?projectTitle ?readme FROM ${KAIROS_GRAPH} WHERE {
+        ?task a liqk:Task ;
+              liqk:title ?title ;
+              liqk:task-status liqk:task-status-not-started .
+        ${projectFilter}
+        BIND(liqk:task-status-not-started AS ?status)
+        OPTIONAL { ?task liqk:priority ?priority . ?priority liqk:priority-rank ?priorityRank }
+        OPTIONAL { ?task liqk:project ?project . ?project liqk:title ?projectTitle }
+        OPTIONAL { ?task liqk:readme ?readme }
+      }
+      ORDER BY DESC(?priorityRank)`;
+
+    const result = await this.query(sparql);
+    return this._mapTasks(result);
+  }
+
+  /**
    * Get all tasks
    * @returns {Promise<Array>} Array of all tasks ordered by priority desc
    */

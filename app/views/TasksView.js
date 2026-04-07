@@ -13,6 +13,7 @@ import ReadmeModal from '../components/ReadmeModal';
 
 const TABS = [
   { key: 'priority', label: 'Priority' },
+  { key: 'todo', label: 'Todo' },
   { key: 'all', label: 'All' },
   { key: 'completed', label: 'Completed' },
   { key: 'actions', label: 'Actions' },
@@ -132,6 +133,9 @@ export default function TasksView({ selectedProject, onClearProject }) {
         switch (activeTab) {
           case 'priority':
             result = await lkd.getPriorityTasks(pUri);
+            break;
+          case 'todo':
+            result = await lkd.getTodoTasks(pUri);
             break;
           case 'all':
             result = await lkd.getAllTasks(pUri);
