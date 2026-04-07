@@ -264,16 +264,27 @@ class LKDService {
   }
 
   _mapTasks(result) {
-    return result.results.bindings.map(b => ({
-      uri: b.task.value,
-      title: b.title.value,
-      priority: b.priority?.value?.split('#')[1],
-      priorityRank: b.priorityRank?.value ? parseInt(b.priorityRank.value, 10) : 0,
-      status: b.status?.value?.split('#')[1],
-      project: b.projectTitle?.value,
-      readmeUri: b.readme?.value,
-      readmeUuid: b.readme?.value?.replace('urn:uuid:', ''),
-    }));
+    const taskMap = new Map();
+    for (const b of result.results.bindings) {
+      const uri = b.task.value;
+      if (!taskMap.has(uri)) {
+        taskMap.set(uri, {
+          uri,
+          title: b.title.value,
+          priority: b.priority?.value?.split('#')[1],
+          priorityRank: b.priorityRank?.value ? parseInt(b.priorityRank.value, 10) : 0,
+          status: b.status?.value?.split('#')[1],
+          projects: [],
+          readmeUri: b.readme?.value,
+          readmeUuid: b.readme?.value?.replace('urn:uuid:', ''),
+        });
+      }
+      const projectTitle = b.projectTitle?.value;
+      if (projectTitle && !taskMap.get(uri).projects.includes(projectTitle)) {
+        taskMap.get(uri).projects.push(projectTitle);
+      }
+    }
+    return Array.from(taskMap.values());
   }
 
   /**

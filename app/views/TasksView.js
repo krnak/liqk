@@ -64,9 +64,9 @@ function TaskItem({ task, onMarkDone, onMarkTrashed, onReadmePress }) {
         <Text style={styles.taskTitle} numberOfLines={2}>
           {task.title}
         </Text>
-        {task.project && (
+        {task.projects.length > 0 && (
           <Text style={styles.taskProject} numberOfLines={1}>
-            {task.project}
+            {task.projects.join(', ')}
           </Text>
         )}
       </View>
