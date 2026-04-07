@@ -106,7 +106,7 @@ function ActionItem({ action }) {
   );
 }
 
-export default function TasksView() {
+export default function TasksView({ selectedProject, onClearProject }) {
   const [activeTab, setActiveTab] = useState('priority');
   const [tasks, setTasks] = useState([]);
   const [actions, setActions] = useState([]);
@@ -117,7 +117,7 @@ export default function TasksView() {
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, selectedProject?.uri]);
 
   const loadData = async () => {
     setLoading(true);
@@ -128,15 +128,16 @@ export default function TasksView() {
         setActions(result);
       } else {
         let result;
+        const pUri = selectedProject?.uri || null;
         switch (activeTab) {
           case 'priority':
-            result = await lkd.getPriorityTasks();
+            result = await lkd.getPriorityTasks(pUri);
             break;
           case 'all':
-            result = await lkd.getAllTasks();
+            result = await lkd.getAllTasks(pUri);
             break;
           case 'completed':
-            result = await lkd.getCompletedTasks();
+            result = await lkd.getCompletedTasks(pUri);
             break;
         }
         setTasks(result);
@@ -243,6 +244,17 @@ export default function TasksView() {
     <View style={styles.container}>
       <Text style={styles.title}>Tasks</Text>
 
+      {selectedProject && (
+        <View style={styles.filterChip}>
+          <Text style={styles.filterChipText} numberOfLines={1}>
+            {selectedProject.title}
+          </Text>
+          <TouchableOpacity onPress={onClearProject}>
+            <Text style={styles.filterChipClose}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.tabs}>
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -320,6 +332,28 @@ const styles = StyleSheet.create({
     color: '#333',
     padding: 24,
     paddingBottom: 16,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#e9ecef',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingLeft: 12,
+    paddingRight: 8,
+    marginLeft: 24,
+    marginBottom: 8,
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: '#333',
+    marginRight: 6,
+  },
+  filterChipClose: {
+    fontSize: 14,
+    color: '#666',
+    padding: 4,
   },
   tabs: {
     flexDirection: 'row',

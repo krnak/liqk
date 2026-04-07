@@ -200,12 +200,14 @@ class LKDService {
    * Get priority tasks (priority >= pinned, not completed/cancelled)
    * @returns {Promise<Array>} Array of tasks ordered by priority desc
    */
-  async getPriorityTasks() {
+  async getPriorityTasks(projectUri = null) {
+    const projectFilter = projectUri ? `?task liqk:project <${projectUri}> .` : '';
     const sparql = `${PREFIXES}
       SELECT ?task ?title ?priority ?priorityRank ?status ?projectTitle ?readme FROM ${KAIROS_GRAPH} WHERE {
         ?task a liqk:Task ;
               liqk:title ?title ;
               liqk:priority ?priority .
+        ${projectFilter}
         ?priority liqk:priority-rank ?priorityRank .
         liqk:priority-pinned liqk:priority-rank ?pinnedRank .
         FILTER(?priorityRank >= ?pinnedRank)
@@ -226,11 +228,13 @@ class LKDService {
    * Get all tasks
    * @returns {Promise<Array>} Array of all tasks ordered by priority desc
    */
-  async getAllTasks() {
+  async getAllTasks(projectUri = null) {
+    const projectFilter = projectUri ? `?task liqk:project <${projectUri}> .` : '';
     const sparql = `${PREFIXES}
       SELECT ?task ?title ?priority ?priorityRank ?status ?projectTitle ?readme FROM ${KAIROS_GRAPH} WHERE {
         ?task a liqk:Task ;
               liqk:title ?title .
+        ${projectFilter}
         OPTIONAL { ?task liqk:priority ?priority . ?priority liqk:priority-rank ?priorityRank }
         OPTIONAL { ?task liqk:task-status ?status }
         OPTIONAL { ?task liqk:project ?project . ?project liqk:title ?projectTitle }
@@ -246,12 +250,14 @@ class LKDService {
    * Get completed tasks
    * @returns {Promise<Array>} Array of completed tasks
    */
-  async getCompletedTasks() {
+  async getCompletedTasks(projectUri = null) {
+    const projectFilter = projectUri ? `?task liqk:project <${projectUri}> .` : '';
     const sparql = `${PREFIXES}
       SELECT ?task ?title ?priority ?priorityRank ?status ?projectTitle ?readme FROM ${KAIROS_GRAPH} WHERE {
         ?task a liqk:Task ;
               liqk:title ?title ;
               liqk:task-status ?status .
+        ${projectFilter}
         FILTER(?status = liqk:task-status-done || ?status = liqk:task-status-hall-of-fame)
         OPTIONAL { ?task liqk:priority ?priority . ?priority liqk:priority-rank ?priorityRank }
         OPTIONAL { ?task liqk:project ?project . ?project liqk:title ?projectTitle }
@@ -564,6 +570,23 @@ class LKDService {
       oldValue: b.oldValue?.value?.split('#')[1],
       newValue: b.newValue.value.split('#')[1],
       created: parseInt(b.created.value, 10),
+    }));
+  }
+
+  async getProjects() {
+    const sparql = `${PREFIXES}
+      SELECT ?project ?title ?abbrv FROM ${KAIROS_GRAPH} WHERE {
+        ?project a liqk:Project ;
+                 liqk:title ?title .
+        OPTIONAL { ?project liqk:abbrv ?abbrv }
+      }
+      ORDER BY ?title`;
+
+    const result = await this.query(sparql);
+    return result.results.bindings.map(b => ({
+      uri: b.project.value,
+      title: b.title.value,
+      abbrv: b.abbrv?.value,
     }));
   }
 }

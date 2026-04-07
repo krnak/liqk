@@ -201,6 +201,12 @@ export default function Sidebar({
             onPress={() => onNavigate('inbox')}
             active={activeView === 'inbox'}
           />
+          <MenuItem
+            icon="📂"
+            label="Projects"
+            onPress={() => onNavigate('projects')}
+            active={activeView === 'projects'}
+          />
         </View>
 
         {/* Favorites */}

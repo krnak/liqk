@@ -18,6 +18,7 @@ import Sidebar from './components/Sidebar';
 import InboxView from './views/InboxView';
 import TasksView from './views/TasksView';
 import SettingsView from './views/SettingsView';
+import ProjectsView from './views/ProjectsView';
 import MarkdownViewer from './views/MarkdownViewer';
 
 function AppContent() {
@@ -29,6 +30,7 @@ function AppContent() {
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [activeView, setActiveView] = useState('tasks');
+  const [selectedProject, setSelectedProject] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
 
   useEffect(() => {
@@ -50,7 +52,14 @@ function AppContent() {
 
   const handleNavigate = (view) => {
     setViewingFile(null);
+    if (view === 'tasks') setSelectedProject(null);
     setActiveView(view);
+    if (isMobile) setSidebarCollapsed(true);
+  };
+
+  const handleSelectProject = (project) => {
+    setSelectedProject(project);
+    setActiveView('tasks');
     if (isMobile) setSidebarCollapsed(true);
   };
 
@@ -86,11 +95,18 @@ function AppContent() {
     switch (activeView) {
       case 'inbox':
         return <InboxView />;
+      case 'projects':
+        return <ProjectsView onSelectProject={handleSelectProject} />;
       case 'settings':
         return <SettingsView onTokenCleared={handleTokenCleared} />;
       case 'tasks':
       default:
-        return <TasksView />;
+        return (
+          <TasksView
+            selectedProject={selectedProject}
+            onClearProject={() => setSelectedProject(null)}
+          />
+        );
     }
   };
 
