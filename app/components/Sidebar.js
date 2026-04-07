@@ -6,7 +6,9 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import lkd from '../services/lkd';
 
 function SectionHeader({ title, collapsed, onToggle }) {
@@ -143,7 +145,9 @@ export default function Sidebar({
   activeView,
   onNavigate,
   onFileOpen,
+  mobile,
 }) {
+  const insets = useSafeAreaInsets();
   const [fsPath, setFsPath] = useState('/');
   const [sectionsCollapsed, setSectionsCollapsed] = useState({
     favorites: true,
@@ -167,8 +171,14 @@ export default function Sidebar({
     );
   }
 
-  return (
-    <View style={styles.sidebar}>
+  const sidebarContent = (
+    <View
+      style={[
+        styles.sidebar,
+        mobile && styles.sidebarMobile,
+        mobile && { paddingTop: insets.top },
+      ]}
+    >
       <View style={styles.sidebarHeader}>
         <Text style={styles.sidebarTitle}>Liqk</Text>
         <TouchableOpacity style={styles.collapseBtn} onPress={onToggleCollapse}>
@@ -233,15 +243,45 @@ export default function Sidebar({
       </View>
     </View>
   );
+
+  if (mobile) {
+    return (
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onToggleCollapse} />
+        {sidebarContent}
+      </View>
+    );
+  }
+
+  return sidebarContent;
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    zIndex: 100,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
   sidebar: {
     width: 260,
     backgroundColor: '#f5f5f5',
     borderRightWidth: 1,
     borderRightColor: '#e0e0e0',
     flexDirection: 'column',
+  },
+  sidebarMobile: {
+    width: '80%',
+    maxWidth: 300,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    zIndex: 101,
   },
   collapsedSidebar: {
     width: 48,

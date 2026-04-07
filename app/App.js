@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  ActivityIndicator,
+  TouchableOpacity,
+  Text,
+  useWindowDimensions,
+} from 'react-native';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import lkd from './services/lkd';
 import AccessTokenDialog from './components/AccessTokenDialog';
 import Sidebar from './components/Sidebar';
@@ -9,7 +20,11 @@ import TasksView from './views/TasksView';
 import SettingsView from './views/SettingsView';
 import MarkdownViewer from './views/MarkdownViewer';
 
-export default function App() {
+function AppContent() {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isMobile = width < 600;
+
   const [loading, setLoading] = useState(true);
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -36,11 +51,12 @@ export default function App() {
   const handleNavigate = (view) => {
     setViewingFile(null);
     setActiveView(view);
+    if (isMobile) setSidebarCollapsed(true);
   };
 
   const handleFileOpen = (file) => {
-    // file is { uuid, label }
     setViewingFile(file);
+    if (isMobile) setSidebarCollapsed(true);
   };
 
   const handleFileClose = () => {
@@ -86,18 +102,57 @@ export default function App() {
       />
       {!showTokenDialog && (
         <View style={styles.appLayout}>
-          <Sidebar
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-            activeView={activeView}
-            onNavigate={handleNavigate}
-            onFileOpen={handleFileOpen}
-          />
-          <View style={styles.mainContent}>{renderContent()}</View>
+          {isMobile ? (
+            <>
+              <View style={styles.mainContent}>{renderContent()}</View>
+              {sidebarCollapsed && (
+                <TouchableOpacity
+                  style={[
+                    styles.hamburger,
+                    { top: Math.max(insets.top, 8) + 4 },
+                  ]}
+                  onPress={() => setSidebarCollapsed(false)}
+                >
+                  <Text style={styles.hamburgerIcon}>☰</Text>
+                </TouchableOpacity>
+              )}
+              {!sidebarCollapsed && (
+                <View style={StyleSheet.absoluteFill}>
+                  <Sidebar
+                    collapsed={false}
+                    onToggleCollapse={() => setSidebarCollapsed(true)}
+                    activeView={activeView}
+                    onNavigate={handleNavigate}
+                    onFileOpen={handleFileOpen}
+                    mobile
+                  />
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <Sidebar
+                collapsed={sidebarCollapsed}
+                onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+                activeView={activeView}
+                onNavigate={handleNavigate}
+                onFileOpen={handleFileOpen}
+              />
+              <View style={styles.mainContent}>{renderContent()}</View>
+            </>
+          )}
         </View>
       )}
       <StatusBar style="auto" />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 
@@ -118,5 +173,25 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+  },
+  hamburger: {
+    position: 'absolute',
+    left: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    zIndex: 10,
+  },
+  hamburgerIcon: {
+    fontSize: 20,
+    color: '#333',
   },
 });
