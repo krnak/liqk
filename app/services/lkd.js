@@ -598,10 +598,12 @@ class LKDService {
 
   async getProjects() {
     const sparql = `${PREFIXES}
-      SELECT ?project ?title ?abbrv FROM ${KAIROS_GRAPH} WHERE {
+      SELECT ?project ?title ?abbrv ?status ?rank FROM ${KAIROS_GRAPH} WHERE {
         ?project a liqk:Project ;
                  liqk:title ?title .
         OPTIONAL { ?project liqk:abbrv ?abbrv }
+        OPTIONAL { ?project liqk:status ?status }
+        OPTIONAL { ?project liqk:rank ?rank }
       }
       ORDER BY ?title`;
 
@@ -610,7 +612,63 @@ class LKDService {
       uri: b.project.value,
       title: b.title.value,
       abbrv: b.abbrv?.value,
+      status: b.status?.value?.split('#')[1],
+      rank: b.rank?.value ? parseInt(b.rank.value, 10) : Infinity,
     }));
+  }
+
+  /**
+   * Update project status and create ModifyAction
+   * @param {string} projectUri - Project URI
+   * @param {string} newStatus - New status (e.g., 'project-status-focus')
+   */
+  async updateProjectStatus(projectUri, newStatus) {
+    const getStatusSparql = `${PREFIXES}
+      SELECT ?status FROM ${KAIROS_GRAPH} WHERE {
+        <${projectUri}> liqk:status ?status .
+      }`;
+
+    const result = await this.query(getStatusSparql);
+    const oldStatus = result.results.bindings[0]?.status?.value;
+
+    const actionUri = `urn:uuid:${uuidv4()}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const newStatusUri = `liqk:${newStatus}`;
+
+    let sparql;
+    if (oldStatus) {
+      sparql = `${PREFIXES}
+        DELETE DATA {
+          GRAPH ${KAIROS_GRAPH} {
+            <${projectUri}> liqk:status <${oldStatus}> .
+          }
+        };
+        INSERT DATA {
+          GRAPH ${KAIROS_GRAPH} {
+            <${projectUri}> liqk:status ${newStatusUri} .
+            <${actionUri}> a liqk:ModifyAction ;
+              dcterms:subject <${projectUri}> ;
+              liqk:modified-property liqk:status ;
+              liqk:old-value <${oldStatus}> ;
+              liqk:new-value ${newStatusUri} ;
+              dc:created ${timestamp} .
+          }
+        }`;
+    } else {
+      sparql = `${PREFIXES}
+        INSERT DATA {
+          GRAPH ${KAIROS_GRAPH} {
+            <${projectUri}> liqk:status ${newStatusUri} .
+            <${actionUri}> a liqk:ModifyAction ;
+              dcterms:subject <${projectUri}> ;
+              liqk:modified-property liqk:status ;
+              liqk:new-value ${newStatusUri} ;
+              dc:created ${timestamp} .
+          }
+        }`;
+    }
+
+    await this.update(sparql);
   }
 }
 
