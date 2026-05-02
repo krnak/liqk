@@ -8,6 +8,9 @@ cd mcp && npm install && npm run build && cd ..
 ssh liqk 'mkdir -p /root/mcp'
 scp -r mcp/dist mcp/package.json mcp/package-lock.json liqk:/root/mcp/
 ssh liqk 'cd /root/mcp && npm install --omit=dev'
+# schema docs served as MCP resources (liqk://schema, liqk://filesystem)
+ssh liqk 'mkdir -p /root/mcp/docs'
+scp liqk-schema.md filesystem.md liqk:/root/mcp/docs/
 # run: cd /root/mcp && GATE_URL=http://127.0.0.1:8080 BIND_ADDR=127.0.0.1:8090 node dist/server.js
 # (wire as a systemd unit for production)
 #

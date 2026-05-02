@@ -1,10 +1,28 @@
 import express, { type Request as ExpressRequest, type Response as ExpressResponse } from "express";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
 const GATE_URL = (process.env.GATE_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
 const BIND_ADDR = process.env.BIND_ADDR ?? "127.0.0.1:8090";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DOCS_DIR = process.env.DOCS_DIR ?? resolve(__dirname, "..", "docs");
+
+function loadDoc(name: string): string {
+  try {
+    return readFileSync(resolve(DOCS_DIR, name), "utf8");
+  } catch (e) {
+    console.warn(`could not load ${name} from ${DOCS_DIR}: ${(e as Error).message}`);
+    return `(${name} unavailable on this server)`;
+  }
+}
+
+const SCHEMA_DOC = loadDoc("liqk-schema.md");
+const FILESYSTEM_DOC = loadDoc("filesystem.md");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,8 +94,10 @@ function buildServer(bearer: string): McpServer {
 
   server.tool(
     "read_file",
-    "Fetch a file from liqk by its UUID. Returns text for textual MIME types, otherwise a base64-encoded resource.",
-    { uuid: z.string().regex(UUID_RE, "must be a valid UUID") },
+    "Fetch a stored file by UUID. See resource `liqk://filesystem` for how to locate UUIDs.",
+    {
+      uuid: z.string().regex(UUID_RE, "must be a valid UUID").describe("Bare file UUID, no extension."),
+    },
     async ({ uuid }): Promise<ToolResult> => {
       const url = `${GATE_URL}/res/${encodeURIComponent(uuid)}`;
       let resp: Response;
@@ -113,8 +133,10 @@ function buildServer(bearer: string): McpServer {
 
   server.tool(
     "sparql_query",
-    "Run a read-only SPARQL query against the liqk Oxigraph store. SELECT/ASK/CONSTRUCT/DESCRIBE only; UPDATE/INSERT/DELETE/LOAD/CLEAR/DROP/CREATE/ADD/MOVE/COPY are rejected. Returns SPARQL JSON results.",
-    { query: z.string().min(1).max(20_000) },
+    "Read-only SPARQL (SELECT/ASK/CONSTRUCT/DESCRIBE) against liqk's Oxigraph. Read resources `liqk://schema` and `liqk://filesystem` for vocab and graph URIs before writing non-trivial queries.",
+    {
+      query: z.string().min(1).max(20_000).describe("SPARQL 1.1 query. Default graph is empty — use FROM or GRAPH."),
+    },
     async ({ query }): Promise<ToolResult> => {
       const stripped = stripCommentsAndStrings(query);
       if (WRITE_KEYWORDS.test(stripped)) {
@@ -142,6 +164,34 @@ function buildServer(bearer: string): McpServer {
       }
       return { content: [{ type: "text", text }] };
     },
+  );
+
+  server.resource(
+    "liqk-schema",
+    "liqk://schema",
+    {
+      title: "liqk ontology",
+      description:
+        "Full reference for the liqk: vocabulary — classes, predicates, status enums, priority ranks, ModifyAction shape, and Turtle examples. Read this before writing non-trivial SPARQL against the kairos graph.",
+      mimeType: "text/markdown",
+    },
+    async () => ({
+      contents: [{ uri: "liqk://schema", mimeType: "text/markdown", text: SCHEMA_DOC }],
+    }),
+  );
+
+  server.resource(
+    "liqk-filesystem",
+    "liqk://filesystem",
+    {
+      title: "liqk filesystem graph",
+      description:
+        "Reference for the filesystem named graph: posix:File / posix:Directory layout, predicates (rdfs:label, posix:size, dc:format, dc:created, liqk:storedAs), and how `/res/{uuid}` resolves files. Read this before navigating files or directories.",
+      mimeType: "text/markdown",
+    },
+    async () => ({
+      contents: [{ uri: "liqk://filesystem", mimeType: "text/markdown", text: FILESYSTEM_DOC }],
+    }),
   );
 
   return server;
