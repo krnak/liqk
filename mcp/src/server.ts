@@ -1,4 +1,5 @@
 import express, { type Request as ExpressRequest, type Response as ExpressResponse } from "express";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -164,6 +165,15 @@ function buildServer(bearer: string): McpServer {
       }
       return { content: [{ type: "text", text }] };
     },
+  );
+
+  server.tool(
+    "uuid_v4",
+    "Generate a fresh random UUID (v4). Useful when minting subject URIs for new resources before writing SPARQL.",
+    {},
+    async (): Promise<ToolResult> => ({
+      content: [{ type: "text", text: randomUUID() }],
+    }),
   );
 
   server.resource(
