@@ -2,10 +2,15 @@
 """Generate cryptographically random access tokens."""
 
 import hashlib
+import os
 import secrets
 from datetime import datetime
 
 def main():
+    if os.geteuid() != 0:
+        print("Error: must run as root (sudo) — tokens.txt is root-only")
+        return 1
+
     label = input("Label: ").strip()
     if not label:
         print("Error: label cannot be empty")
@@ -17,6 +22,8 @@ def main():
 
     with open("tokens.txt", "a") as f:
         f.write(f"{timestamp} {label} {token} {token_hash}\n")
+    os.chown("tokens.txt", 0, 0)
+    os.chmod("tokens.txt", 0o600)
 
     print(f"Token: {token}")
     print(f"Hash:  {token_hash}")

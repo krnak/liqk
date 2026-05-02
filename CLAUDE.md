@@ -10,14 +10,17 @@ Liqk is a personal knowledge management system built on RDF/SPARQL. It consists 
 
 ```
 app/ (React Native/Expo)  ──►  gate/ (Rust/Axum, :8080)  ──►  Oxigraph (:7878)
-                                     │
-                                     ▼
-                                 files/ (UUID-named files on disk)
+                                     ▲             │
+                                     │             ▼
+mcp/ (TS, :8090) ────────────────────┘         files/ (UUID-named files on disk)
+   ▲
+   └── Claude mobile (remote MCP connector)
 ```
 
 - **Oxigraph** — RDF triplestore storing all data (tasks, projects, filesystem metadata, access policies)
 - **gate/** (`oxigraph-gate`) — Rust/Axum HTTP proxy on port 8080 that adds RDF-based access control, token authentication, cookie sessions, and file storage endpoints on top of Oxigraph
 - **app/** — React Native (Expo) cross-platform client for task management; communicates with gate via SPARQL queries/updates and file REST endpoints
+- **mcp/** — TypeScript MCP sidecar on port 8090 (nginx route `/mcp`). Exposes read-only `read_file` and `sparql_query` tools to the Claude mobile app. Accepts the gate token via `Authorization: Bearer …` header or `?token=…` query string (the latter is needed because the claude.ai custom-connector UI is OAuth-only — no bearer field). Forwards the token to the gate so existing access ranks apply.
 - **oxidata/** — Oxigraph's on-disk database directory (RocksDB SST files)
 - **files/** — UUID-named file storage managed by the gate's filesystem module
 - **liqk-crypto/** — Standalone Rust CLI for file encryption (ChaCha20Poly1305 + X-Wing KEM), used in backup pipeline
