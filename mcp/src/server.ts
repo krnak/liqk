@@ -168,6 +168,34 @@ function buildServer(bearer: string): McpServer {
   );
 
   server.tool(
+    "sparql_update",
+    "Execute a SPARQL 1.1 UPDATE (INSERT/DELETE/LOAD/CLEAR/etc.) against liqk's Oxigraph. Requires edit access (rank >= 3) on `<http://liqk.org/graph>` for the bearer token. Read `liqk://schema` and `liqk://filesystem` before writing non-trivial updates.",
+    {
+      update: z.string().min(1).max(50_000).describe("SPARQL 1.1 UPDATE. Use GRAPH <...> { ... } to scope writes to the right named graph."),
+    },
+    async ({ update }): Promise<ToolResult> => {
+      let resp: Response;
+      try {
+        resp = await fetch(`${GATE_URL}/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/sparql-update",
+            Authorization: bearer,
+          },
+          body: update,
+        });
+      } catch (e) {
+        return errorResult(`gate request failed: ${(e as Error).message}`);
+      }
+      const text = await resp.text();
+      if (!resp.ok) {
+        return errorResult(`gate ${resp.status}: ${text.slice(0, 1000)}`);
+      }
+      return { content: [{ type: "text", text: text || "ok" }] };
+    },
+  );
+
+  server.tool(
     "uuid_v4",
     "Generate a fresh random UUID (v4). Useful when minting subject URIs for new resources before writing SPARQL.",
     {},
